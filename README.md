@@ -1,5 +1,6 @@
 ##### Requirements
-- php
+- php >= 8.4 (with `pcntl`, `posix` and `sockets` extensions)
+- composer
 - clickhouse
 
 ##### Installation
@@ -7,7 +8,7 @@
 - `cd /opt`
 - `git clone https://github.com/pinba-server/pinba-server.git`
 - `cd pinba-server`
-- `php composer.phar install`
+- `composer install`
 - `clickhouse-client -n < clickhouse/pinba.requests.sql`
 
 ##### Usage
@@ -15,9 +16,17 @@
 - `php workerman_clickhouse.php start -d`
 - `php workerman_clickhouse.php stop`
 
+The list of UDP listeners and their ClickHouse targets is in `config.json`
+(the path can be overridden with the `PINBA_CONFIG` environment variable).
+
+To verify the installation, send a test packet and check the table:
+
+- `php tools/send_test_packet.php 127.0.0.1 30002`
+
 ##### Systemd autostart script
-- `sudo cp systemd/pinba-server.service /usr/lib/systemd/system/pinba-server.service`
-- `sudo systemctl daemon-reload && systemctl enable pinba-server && systemctl start pinba-server`
+- `sudo systemd/install.sh` — installs and starts `pinba-server.service`
+- `sudo systemd/install.sh pinba-server-loki` — the same for the Loki variant
+- `sudo systemd/uninstall.sh` — stops and removes the unit
 
 ##### Stats for 24 hours with about 10 RPS on php-fpm and 450 RPS on nginx:
 
