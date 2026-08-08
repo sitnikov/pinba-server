@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/Pinba/Request.php';
 require_once __DIR__ . '/GPBMetadata/Pinba.php';
@@ -23,40 +25,44 @@ if (!is_array($config) || empty($config['workers']) || !is_array($config['worker
 $pinbaWorkers = [];
 
 foreach ($config['workers'] as $i => $workerConfig) {
-    $pinbaWorkers[$i] = new PinbaWorker($workerConfig['host'], $workerConfig['port'], $workerConfig['clickhouseUrl'], $workerConfig['clickhouseTable'], $workerConfig['timer']);
+    $pinbaWorkers[$i] = new PinbaWorker(
+        (string)$workerConfig['host'],
+        (int)$workerConfig['port'],
+        (string)$workerConfig['clickhouseUrl'],
+        (string)$workerConfig['clickhouseTable'],
+        (int)$workerConfig['timer']
+    );
 }
 
 Worker::runAll();
 
 class PinbaWorker {
     // ~2x headroom below the 200M systemd MemoryLimit
-    const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+    private const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
-    public $clickhouseUrl;
-    public $clickhouseTable;
-    public $timer;
-    public $worker;
-    public $request;
-    public $rows = '';
+    private Worker $worker;
+    private Request $request;
+    private string $rows = '';
 
-    public function __construct($host, $port, $clickhouseUrl, $clickhouseTable, $timer)
-    {
+    public function __construct(
+        string $host,
+        int $port,
+        private readonly string $clickhouseUrl,
+        private readonly string $clickhouseTable,
+        private readonly int $timer,
+    ) {
         $this->worker = new Worker("udp://$host:$port");
         $this->worker->onWorkerStart = [$this, 'onWorkerStart'];
         $this->worker->onMessage = [$this, 'onMessage'];
-
-        $this->clickhouseUrl = $clickhouseUrl;
-        $this->clickhouseTable = $clickhouseTable;
-        $this->timer = $timer;
     }
 
-    public function onWorkerStart() {
+    public function onWorkerStart(): void {
         $this->request = new Request();
 
         Timer::add($this->timer, [$this, 'flush']);
     }
 
-    public function flush() {
+    public function flush(): void {
         if ($this->rows === '') {
             return;
         }
@@ -78,7 +84,7 @@ class PinbaWorker {
         $this->rows = '';
     }
 
-    public function onMessage($connection, $data)
+    public function onMessage($connection, string $data): void
     {
         $this->request->clear();
         $this->request->mergeFromString($data);
