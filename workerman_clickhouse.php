@@ -110,12 +110,16 @@ class PinbaWorker {
                 $row['timers.value'][]= $timerValue[$timerId];
                 $row['timers.hit_count'][]= $timerHitCount;
 
+                $timerTagNames = [];
+                $timerTagValues = [];
                 for ($i = 0; $i < $timerTagCount[$timerId]; $i++) {
-                    $row['timers.tag_name'][$timerId][]=$dictionary[$timerTagName[$timerTagId]];
-                    $row['timers.tag_value'][$timerId][]=$dictionary[$timerTagValue[$timerTagId]];
+                    $timerTagNames[]= $dictionary[$timerTagName[$timerTagId]];
+                    $timerTagValues[]= $dictionary[$timerTagValue[$timerTagId]];
 
                     $timerTagId++;
                 }
+                $row['timers.tag_name'][]= $timerTagNames;
+                $row['timers.tag_value'][]= $timerTagValues;
             }
         }
 

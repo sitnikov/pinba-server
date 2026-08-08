@@ -103,12 +103,16 @@ $tcp_worker->onMessage = function($connection, $data) use (&$request, &$streams)
             $row['entries']['timers']['value'][]= $timerValue[$timerId];
             $row['entries']['timers']['hit_count'][]= $timerHitCount;
 
+            $timerTagNames = [];
+            $timerTagValues = [];
             for ($i = 0; $i < $timerTagCount[$timerId]; $i++) {
-                $row['entries']['timers']['tag_name'][$timerId][]=$dictionary[$timerTagName[$timerTagId]];
-                $row['entries']['timers']['tag_value'][$timerId][]=$dictionary[$timerTagValue[$timerTagId]];
+                $timerTagNames[]= $dictionary[$timerTagName[$timerTagId]];
+                $timerTagValues[]= $dictionary[$timerTagValue[$timerTagId]];
 
                 $timerTagId++;
             }
+            $row['entries']['timers']['tag_name'][]= $timerTagNames;
+            $row['entries']['timers']['tag_value'][]= $timerTagValues;
         }
         $row['entries']['timers'] = json_encode($row['entries']['timers']);
     }
