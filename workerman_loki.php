@@ -126,7 +126,7 @@ $tcp_worker->onMessage = function($connection, $data) use (&$request, &$streams)
         $stream['labels'][]= "$name=\"$value\"";
     }
     $stream['labels'] = '{' . join(',', $stream['labels']) . '}';
-    $stream['entries'][] = ['ts' => date("Y-m-d\TH:i:s\Z"), 'line' => json_encode($row['entries'])];
+    $stream['entries'][] = ['ts' => date(DATE_RFC3339), 'line' => json_encode($row['entries'])];
     $streams[]= $stream;
 };
 
