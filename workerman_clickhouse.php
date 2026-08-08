@@ -114,8 +114,7 @@ class PinbaWorker {
                 if ($pattern === '') {
                     continue;
                 }
-                // /.../ means a regular expression, anything else is an fnmatch mask like "mail.*"
-                if (strlen($pattern) > 1 && $pattern[0] === '/' && @preg_match($pattern, '') === false) {
+                if ($this->isRegex($pattern) && @preg_match($pattern, '') === false) {
                     fwrite(STDERR, "pinba-server: invalid $kind regex $pattern for '$field'\n");
                     exit(1);
                 }
@@ -126,8 +125,16 @@ class PinbaWorker {
         return $compiled;
     }
 
+    // "/.../" (with optional trailing PCRE modifiers) is a regular expression;
+    // anything else — including paths like "/health.php" or "/api/health" —
+    // is an fnmatch mask
+    private function isRegex(string $pattern): bool {
+        return strlen($pattern) > 2 && $pattern[0] === '/'
+            && preg_match('#/[imsxuUXJ]*$#', $pattern) === 1;
+    }
+
     private function matches(string $pattern, string $value): bool {
-        return $pattern[0] === '/' && strlen($pattern) > 1
+        return $this->isRegex($pattern)
             ? (bool)preg_match($pattern, $value)
             : fnmatch($pattern, $value);
     }

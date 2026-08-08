@@ -1,0 +1,42 @@
+{
+  "workers": [
+    {
+      "host": "0.0.0.0",
+      "port": 30002,
+      "clickhouseUrl": "http://127.0.0.1:8123?user=default",
+      "clickhouseTable": "pinba.requests",
+      "timer": 60,
+
+      "lowercase": ["server_name"],
+
+      "rewrite": {
+        "server_name": [["/^www\\./", ""]]
+      },
+
+      "include": {
+        "server_name": [
+          "example.com",
+          "*.example.com",
+          "/(^|\\.)example\\.(net|org|co\\.uk)$/"
+        ]
+      },
+
+      "exclude": {
+        "server_name": [
+          "unknown",
+          "localhost",
+          "/^(mail|smtp|pop|imap|ftp|stats|webmail|autodiscover|autoconfig|cpanel)\\./",
+          "/^\\d{1,3}(\\.\\d{1,3}){3}$/"
+        ],
+        "script_name": ["/health.php"]
+      }
+    },
+    {
+      "host": "0.0.0.0",
+      "port": 30003,
+      "clickhouseUrl": "http://127.0.0.1:8123?user=default",
+      "clickhouseTable": "pinba.nginx_requests",
+      "timer": 60
+    }
+  ]
+}

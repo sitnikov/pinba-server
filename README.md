@@ -19,35 +19,47 @@
 The list of UDP listeners and their ClickHouse targets is in `config.json`
 (the path can be overridden with the `PINBA_CONFIG` environment variable).
 
-A worker can drop unwanted requests with optional `include` (allowlist) and
-`exclude` blocks. When `include` is non-empty, only requests matching one of
-its patterns per field pass; `exclude` then drops matches. An empty list is a
-no-op. Patterns are fnmatch-style masks (`mail.*`) or, when wrapped in
-slashes, regular expressions; supported fields are `hostname`, `server_name`,
-`script_name` and `schema`:
+##### Normalization and filtering
 
-```json
-"include": {
-    "server_name": ["*.example.com", "example.com"]
-},
-"exclude": {
-    "server_name": ["mail.*", "/^dev-/"],
-    "script_name": ["/health.php"]
-}
+Each worker can normalize and filter incoming requests before they are
+buffered. The pipeline runs in a fixed order, so the filters always see the
+already-normalized values:
+
+```
+lowercase → rewrite → include → exclude → buffer
 ```
 
-Optional `lowercase` and `rewrite` blocks normalize field values before they
-are filtered and stored (in that order: lowercase, then rewrite, then
-exclude). `lowercase` lists fields to fold to lower case (ASCII); each
-`rewrite` rule is a `["/regex/", "replacement"]` pair applied in order —
-e.g. stripping a leading `www.` from server names:
+All blocks are optional and apply per field; supported fields are `hostname`,
+`server_name`, `script_name` and `schema`. See
+[config.example.json](config.example.json) for a complete annotated example.
 
-```json
-"lowercase": ["server_name"],
-"rewrite": {
-    "server_name": [["/^www\\./", ""]]
-}
-```
+**Pattern syntax** — identical everywhere a pattern is accepted (`include`
+and `exclude`):
+
+- a plain string is an fnmatch-style mask: `mail.*`, `*.example.com`,
+  `backend-??`; a string without wildcards must match exactly
+- a string wrapped in slashes (optionally with trailing PCRE modifiers, e.g.
+  `/…/i`) is a regular expression: `/^dev-/`, `/(^|\.)example\.(net|co\.uk)$/`
+- a leading slash alone does not make a regex: script paths such as
+  `/health.php` or `/api/health` are ordinary masks
+- an unknown field, a malformed rule or an invalid regex aborts startup with
+  a clear error instead of silently filtering nothing
+- an empty pattern list is a no-op
+
+The blocks:
+
+- `lowercase` — list of fields to fold to lower case (ASCII), e.g.
+  `["server_name"]`.
+- `rewrite` — per-field list of `["/regex/", "replacement"]` pairs applied in
+  order (rewrite always uses regular expressions — a replacement needs
+  capture semantics, so masks are not supported here). An empty replacement
+  deletes the match, e.g. `[["/^www\\./", ""]]` folds `www.example.com` into
+  `example.com`.
+- `include` — allowlist: when non-empty for a field, only requests matching
+  at least one of its patterns pass; everything else is dropped. Keep it
+  empty (or absent) to accept all domains.
+- `exclude` — denylist: a request matching any pattern of any listed field is
+  dropped.
 
 To verify the installation, send a test packet and check the table:
 
