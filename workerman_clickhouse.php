@@ -76,8 +76,13 @@ class PinbaWorker {
         }
 
         if ($r === false || $status < 200 || $status >= 300) {
-            // keep the buffer and retry on the next tick
             error_log("pinba-server: insert into {$this->clickhouseTable} failed (HTTP $status): " . trim((string)$r));
+            if ($status >= 400 && $status < 500) {
+                // the server rejected the payload itself — retrying the same batch can never succeed
+                error_log("pinba-server: dropping rejected batch (" . strlen($this->rows) . " bytes) for {$this->clickhouseTable}");
+                $this->rows = '';
+            }
+            // otherwise keep the buffer and retry on the next tick
             return;
         }
 
@@ -98,13 +103,13 @@ class PinbaWorker {
             'hostname' => $this->request->getHostname(),
             'server_name' => $this->request->getServerName(),
             'script_name' => $this->request->getScriptName(),
-            'doc_size' => $this->request->getDocumentSize(),
-            'mem_peak_usage' => $this->request->getMemoryPeak(),
+            'doc_size' => $this->request->getDocumentSize() & 0xFFFFFFFF,
+            'mem_peak_usage' => $this->request->getMemoryPeak() & 0xFFFFFFFF,
             'req_time' => $this->request->getRequestTime(),
             'ru_utime' => $this->request->getRuUtime(),
             'ru_stime' => $this->request->getRuStime(),
-            'status' => $this->request->getStatus(),
-            'memory_footprint' => $this->request->getMemoryFootprint(),
+            'status' => $this->request->getStatus() & 0xFFFFFFFF,
+            'memory_footprint' => $this->request->getMemoryFootprint() & 0xFFFFFFFF,
             'schema' => $this->request->getSchema(),
             'tags.name' => [],
             'tags.value' => [],
@@ -112,7 +117,7 @@ class PinbaWorker {
             'timers.hit_count' => [],
             'timers.tag_name' => [],
             'timers.tag_value' => [],
-            'req_count' => $this->request->getRequestCount() ?: 1,
+            'req_count' => ($this->request->getRequestCount() & 0xFFFFFFFF) ?: 1,
             'timestamp' => date("Y-m-d H:i:s"),
         ];
 
@@ -135,7 +140,7 @@ class PinbaWorker {
             $timerTagId = 0;
             foreach ($timerHitCounts as $timerId => $timerHitCount) {
                 $row['timers.value'][]= $timerValue[$timerId];
-                $row['timers.hit_count'][]= $timerHitCount;
+                $row['timers.hit_count'][]= $timerHitCount & 0xFFFFFFFF;
 
                 $timerTagNames = [];
                 $timerTagValues = [];

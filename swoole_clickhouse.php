@@ -38,8 +38,13 @@ $server->on('WorkerStart', function (Server $server) use ($request, $config, &$j
         }
 
         if ($r === false || $status < 200 || $status >= 300) {
-            // keep the buffer and retry on the next tick
             error_log("pinba-server: insert into {$config['db.table']} failed (HTTP $status): " . trim((string)$r));
+            if ($status >= 400 && $status < 500) {
+                // the server rejected the payload itself — retrying the same batch can never succeed
+                error_log("pinba-server: dropping rejected batch (" . strlen($jsonRows) . " bytes) for {$config['db.table']}");
+                $jsonRows = '';
+            }
+            // otherwise keep the buffer and retry on the next tick
             return;
         }
 
@@ -61,13 +66,13 @@ $server->on('Packet', function (Server $server, $data, $addr) use (&$request, &$
         'hostname' => $request->getHostname(),
         'server_name' => $request->getServerName(),
         'script_name' => $request->getScriptName(),
-        'doc_size' => $request->getDocumentSize(),
-        'mem_peak_usage' => $request->getMemoryPeak(),
+        'doc_size' => $request->getDocumentSize() & 0xFFFFFFFF,
+        'mem_peak_usage' => $request->getMemoryPeak() & 0xFFFFFFFF,
         'req_time' => $request->getRequestTime(),
         'ru_utime' => $request->getRuUtime(),
         'ru_stime' => $request->getRuStime(),
-        'status' => $request->getStatus(),
-        'memory_footprint' => $request->getMemoryFootprint(),
+        'status' => $request->getStatus() & 0xFFFFFFFF,
+        'memory_footprint' => $request->getMemoryFootprint() & 0xFFFFFFFF,
         'schema' => $request->getSchema(),
         'tags.name' => [],
         'tags.value' => [],
@@ -75,7 +80,7 @@ $server->on('Packet', function (Server $server, $data, $addr) use (&$request, &$
         'timers.hit_count' => [],
         'timers.tag_name' => [],
         'timers.tag_value' => [],
-        'req_count' => $request->getRequestCount() ?: 1,
+        'req_count' => ($request->getRequestCount() & 0xFFFFFFFF) ?: 1,
         'timestamp' => date("Y-m-d H:i:s"),
     ];
 
@@ -98,7 +103,7 @@ $server->on('Packet', function (Server $server, $data, $addr) use (&$request, &$
         $timerTagId = 0;
         foreach ($timerHitCounts as $timerId => $timerHitCount) {
             $row['timers.value'][]= $timerValue[$timerId];
-            $row['timers.hit_count'][]= $timerHitCount;
+            $row['timers.hit_count'][]= $timerHitCount & 0xFFFFFFFF;
 
             $timerTagNames = [];
             $timerTagValues = [];

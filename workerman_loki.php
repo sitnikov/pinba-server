@@ -47,8 +47,13 @@ $tcp_worker->onWorkerStart = function () use (&$request, &$streams, &$config){
             }
 
             if ($r === false || $status < 200 || $status >= 300) {
-                // keep the buffer and retry on the next tick
                 error_log("pinba-server: push to {$config['lokiUrl']} failed (HTTP $status): " . trim((string)$r));
+                if ($status >= 400 && $status < 500) {
+                    // the server rejected the payload itself — retrying the same batch can never succeed
+                    error_log("pinba-server: dropping rejected batch (" . count($streams) . " streams)");
+                    $streams = [];
+                }
+                // otherwise keep the buffer and retry on the next tick
                 return;
             }
 
@@ -72,17 +77,17 @@ $tcp_worker->onMessage = function($connection, $data) use (&$request, &$streams)
             'hostname' => $request->getHostname(),
             'server_name' => $request->getServerName(),
             'script_name' => $request->getScriptName(),
-            'status' => $request->getStatus(),
+            'status' => $request->getStatus() & 0xFFFFFFFF,
             'schema' => $request->getSchema(),
         ],
         'entries' => [
-            'doc_size' => $request->getDocumentSize(),
-            'mem_peak_usage' => $request->getMemoryPeak(),
+            'doc_size' => $request->getDocumentSize() & 0xFFFFFFFF,
+            'mem_peak_usage' => $request->getMemoryPeak() & 0xFFFFFFFF,
             'req_time' => $request->getRequestTime(),
             'ru_utime' => $request->getRuUtime(),
             'ru_stime' => $request->getRuStime(),
-            'memory_footprint' => $request->getMemoryFootprint(),
-            'req_count' => $request->getRequestCount() ?: 1,
+            'memory_footprint' => $request->getMemoryFootprint() & 0xFFFFFFFF,
+            'req_count' => ($request->getRequestCount() & 0xFFFFFFFF) ?: 1,
         ],
     ];
 
@@ -111,7 +116,7 @@ $tcp_worker->onMessage = function($connection, $data) use (&$request, &$streams)
         $timerTagId = 0;
         foreach ($timerHitCounts as $timerId => $timerHitCount) {
             $row['entries']['timers']['value'][]= $timerValue[$timerId];
-            $row['entries']['timers']['hit_count'][]= $timerHitCount;
+            $row['entries']['timers']['hit_count'][]= $timerHitCount & 0xFFFFFFFF;
 
             $timerTagNames = [];
             $timerTagValues = [];
