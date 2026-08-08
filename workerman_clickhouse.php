@@ -122,6 +122,6 @@ class PinbaWorker {
         }
 
         //var_export($row);
-        $this->rows .= json_encode($row) . "\n";
+        $this->rows .= json_encode($row, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
     }
 }

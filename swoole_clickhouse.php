@@ -102,7 +102,7 @@ $server->on('Packet', function (Server $server, $data, $addr) use (&$request, &$
     }
 
     //var_export($row);
-    $jsonRows .= json_encode($row) . "\n";
+    $jsonRows .= json_encode($row, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
     //var_export($r);
 });
 

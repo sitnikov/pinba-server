@@ -33,7 +33,7 @@ $tcp_worker->onWorkerStart = function () use (&$request, &$streams, &$config){
         function() use (&$streams, &$config)
         {
             if ($streams) {
-                $post = json_encode(['streams' => $streams]);
+                $post = json_encode(['streams' => $streams], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
                 //{"streams": [{"labels": "{foo=\"bar\"}","entries": [{ "ts": "2018-12-18T08:28:06.801064-04:00", "line": "baz" }]}]}
                 //echo $post . "\n\n";
                 $r = file_get_contents($config['lokiUrl'], false,
@@ -112,7 +112,7 @@ $tcp_worker->onMessage = function($connection, $data) use (&$request, &$streams)
             $row['entries']['timers']['tag_name'][]= $timerTagNames;
             $row['entries']['timers']['tag_value'][]= $timerTagValues;
         }
-        $row['entries']['timers'] = json_encode($row['entries']['timers']);
+        $row['entries']['timers'] = json_encode($row['entries']['timers'], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     //var_export($row);
@@ -126,7 +126,7 @@ $tcp_worker->onMessage = function($connection, $data) use (&$request, &$streams)
         $stream['labels'][]= "$name=\"$value\"";
     }
     $stream['labels'] = '{' . join(',', $stream['labels']) . '}';
-    $stream['entries'][] = ['ts' => date(DATE_RFC3339), 'line' => json_encode($row['entries'])];
+    $stream['entries'][] = ['ts' => date(DATE_RFC3339), 'line' => json_encode($row['entries'], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)];
     $streams[]= $stream;
 };
 
