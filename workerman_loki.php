@@ -25,7 +25,7 @@ $config = [
 $tcp_worker = new Worker("udp://{$config['host:port']}");
 
 $request = null;
-$streams = '';
+$streams = [];
 
 $tcp_worker->onWorkerStart = function () use (&$request, &$streams, &$config){
     $request = new Request();
