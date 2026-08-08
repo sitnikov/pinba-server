@@ -11,7 +11,7 @@ use Swoole\Server;
 $config = [
     'host' => '0.0.0.0',
     'port' => 30002,
-    'clickhouseUrl' => 'http://127.0.01:8123?user=default',
+    'clickhouseUrl' => 'http://127.0.0.1:8123?user=default',
     'db.table' => 'pinba.requests',
     'timer' => 60,
 ];

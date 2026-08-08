@@ -14,7 +14,7 @@ if (!ini_get('date.timezone')) {
 
 $config = [
     'host:port' => '0.0.0.0:30002',
-    'lokiUrl' => 'http://127.0.01:3100/api/prom/push',
+    'lokiUrl' => 'http://127.0.0.1:3100/api/prom/push',
     'db.table' => 'pinba.requests',
     'timer' => 60,
 ];
