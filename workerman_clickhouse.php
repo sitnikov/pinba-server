@@ -12,7 +12,13 @@ if (!ini_get('date.timezone')) {
     ini_set('date.timezone', date_default_timezone_get()); //fix for workerman trouble with timezone
 }
 
-$config = json_decode(file_get_contents('config.json'), true);
+$configFile = getenv('PINBA_CONFIG') ?: __DIR__ . '/config.json';
+$config = json_decode((string)@file_get_contents($configFile), true);
+
+if (!is_array($config) || empty($config['workers']) || !is_array($config['workers'])) {
+    fwrite(STDERR, "pinba-server: cannot read worker list from $configFile\n");
+    exit(1);
+}
 
 $pinbaWorkers = [];
 
