@@ -104,7 +104,7 @@ $server->on('Packet', function (Server $server, $data, $addr) use (&$request, &$
     }
 
     //var_export($row);
-    echo $jsonRows .= json_encode($row) . "\n";
+    $jsonRows .= json_encode($row) . "\n";
     //var_export($r);
 });
 
