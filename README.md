@@ -31,11 +31,14 @@ and `schema`:
 }
 ```
 
-An optional `rewrite` block normalizes field values before they are filtered
-and stored. Each rule is a `["/regex/", "replacement"]` pair applied in order,
+Optional `lowercase` and `rewrite` blocks normalize field values before they
+are filtered and stored (in that order: lowercase, then rewrite, then
+exclude). `lowercase` lists fields to fold to lower case (ASCII); each
+`rewrite` rule is a `["/regex/", "replacement"]` pair applied in order —
 e.g. stripping a leading `www.` from server names:
 
 ```json
+"lowercase": ["server_name"],
 "rewrite": {
     "server_name": [["/^www\\./", ""]]
 }

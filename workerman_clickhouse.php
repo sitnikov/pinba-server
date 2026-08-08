@@ -32,7 +32,8 @@ foreach ($config['workers'] as $i => $workerConfig) {
         (string)$workerConfig['clickhouseTable'],
         (int)$workerConfig['timer'],
         (array)($workerConfig['exclude'] ?? []),
-        (array)($workerConfig['rewrite'] ?? [])
+        (array)($workerConfig['rewrite'] ?? []),
+        (array)($workerConfig['lowercase'] ?? [])
     );
 }
 
@@ -51,6 +52,8 @@ class PinbaWorker {
     private array $exclude = [];
     /** @var array<string, array{string, string}[]> field => [regex, replacement] rules */
     private array $rewrite = [];
+    /** @var string[] fields to lowercase (ASCII) before rewrite/exclude */
+    private array $lowercase = [];
 
     public function __construct(
         string $host,
@@ -60,7 +63,15 @@ class PinbaWorker {
         private readonly int $timer,
         array $exclude = [],
         array $rewrite = [],
+        array $lowercase = [],
     ) {
+        foreach ($lowercase as $field) {
+            if (!in_array($field, self::EXCLUDABLE_FIELDS, true)) {
+                fwrite(STDERR, "pinba-server: unknown lowercase field '$field' (supported: " . implode(', ', self::EXCLUDABLE_FIELDS) . ")\n");
+                exit(1);
+            }
+            $this->lowercase[] = $field;
+        }
         foreach ($rewrite as $field => $rules) {
             if (!in_array($field, self::EXCLUDABLE_FIELDS, true)) {
                 fwrite(STDERR, "pinba-server: unknown rewrite field '$field' (supported: " . implode(', ', self::EXCLUDABLE_FIELDS) . ")\n");
@@ -102,37 +113,48 @@ class PinbaWorker {
         $this->worker->onMessage = [$this, 'onMessage'];
     }
 
-    private function applyRewrites(): void {
+    private function getField(string $field): string {
+        return match ($field) {
+            'hostname' => $this->request->getHostname(),
+            'server_name' => $this->request->getServerName(),
+            'script_name' => $this->request->getScriptName(),
+            'schema' => $this->request->getSchema(),
+        };
+    }
+
+    private function setField(string $field, string $value): void {
+        match ($field) {
+            'hostname' => $this->request->setHostname($value),
+            'server_name' => $this->request->setServerName($value),
+            'script_name' => $this->request->setScriptName($value),
+            'schema' => $this->request->setSchema($value),
+        };
+    }
+
+    private function normalize(): void {
+        foreach ($this->lowercase as $field) {
+            $value = $this->getField($field);
+            $lowered = strtolower($value);
+            if ($lowered !== $value) {
+                $this->setField($field, $lowered);
+            }
+        }
+
         foreach ($this->rewrite as $field => $rules) {
-            $value = match ($field) {
-                'hostname' => $this->request->getHostname(),
-                'server_name' => $this->request->getServerName(),
-                'script_name' => $this->request->getScriptName(),
-                'schema' => $this->request->getSchema(),
-            };
+            $value = $this->getField($field);
             $rewritten = $value;
             foreach ($rules as [$pattern, $replacement]) {
                 $rewritten = preg_replace($pattern, $replacement, $rewritten) ?? $rewritten;
             }
             if ($rewritten !== $value) {
-                match ($field) {
-                    'hostname' => $this->request->setHostname($rewritten),
-                    'server_name' => $this->request->setServerName($rewritten),
-                    'script_name' => $this->request->setScriptName($rewritten),
-                    'schema' => $this->request->setSchema($rewritten),
-                };
+                $this->setField($field, $rewritten);
             }
         }
     }
 
     private function isExcluded(): bool {
         foreach ($this->exclude as $field => $patterns) {
-            $value = match ($field) {
-                'hostname' => $this->request->getHostname(),
-                'server_name' => $this->request->getServerName(),
-                'script_name' => $this->request->getScriptName(),
-                'schema' => $this->request->getSchema(),
-            };
+            $value = $this->getField($field);
             foreach ($patterns as $pattern) {
                 $matched = $pattern[0] === '/' && strlen($pattern) > 1
                     ? (bool)preg_match($pattern, $value)
@@ -184,8 +206,8 @@ class PinbaWorker {
         $this->request->clear();
         $this->request->mergeFromString($data);
 
-        if ($this->rewrite) {
-            $this->applyRewrites();
+        if ($this->lowercase || $this->rewrite) {
+            $this->normalize();
         }
         if ($this->exclude && $this->isExcluded()) {
             return;
