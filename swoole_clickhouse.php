@@ -25,17 +25,29 @@ $request = new Request();
 $server->on('WorkerStart', function (Server $server) use ($request, $config, &$jsonRows)
 {
     $server->tick(1000, function () use ($request, $config, &$jsonRows) {
-        if ($jsonRows) {
-            //echo "$jsonRows\n\n";
-            $r = file_get_contents("{$config['clickhouseUrl']}&query=INSERT%20INTO%20{$config['db.table']}%20FORMAT%20JSONEachRow", false,
-                stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-type: text/plain', 'content' => $jsonRows, 'ignore_errors' => true]]));
-            //echo "$r\n\n";
-            $jsonRows = '';
+        if ($jsonRows === '') {
+            return;
         }
+
+        $r = @file_get_contents("{$config['clickhouseUrl']}&query=INSERT%20INTO%20{$config['db.table']}%20FORMAT%20JSONEachRow", false,
+            stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-type: text/plain', 'content' => $jsonRows, 'ignore_errors' => true, 'timeout' => 10]]));
+
+        $status = 0;
+        if (isset($http_response_header[0]) && preg_match('#^HTTP/\S+\s+(\d{3})#', $http_response_header[0], $m)) {
+            $status = (int)$m[1];
+        }
+
+        if ($r === false || $status < 200 || $status >= 300) {
+            // keep the buffer and retry on the next tick
+            error_log("pinba-server: insert into {$config['db.table']} failed (HTTP $status): " . trim((string)$r));
+            return;
+        }
+
+        $jsonRows = '';
     });
 });
 
-$server->on('Packet', function (Server $server, $data, $addr) use (&$request, &$jsonRows)
+$server->on('Packet', function (Server $server, $data, $addr) use (&$request, &$jsonRows, $config)
 {
     $request->clear();
     $request->mergeFromString($data);
@@ -102,6 +114,10 @@ $server->on('Packet', function (Server $server, $data, $addr) use (&$request, &$
     }
 
     //var_export($row);
+    if (strlen($jsonRows) > 64 * 1024 * 1024) {
+        error_log("pinba-server: buffer for {$config['db.table']} exceeded 64MB, dropping buffered rows");
+        $jsonRows = '';
+    }
     $jsonRows .= json_encode($row, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
     //var_export($r);
 });

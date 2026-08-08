@@ -23,6 +23,9 @@ foreach ($config['workers'] as $i => $workerConfig) {
 Worker::runAll();
 
 class PinbaWorker {
+    // ~2x headroom below the 200M systemd MemoryLimit
+    const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+
     public $clickhouseUrl;
     public $clickhouseTable;
     public $timer;
@@ -44,15 +47,29 @@ class PinbaWorker {
     public function onWorkerStart() {
         $this->request = new Request();
 
-        Timer::add($this->timer, function() {
-            if ($this->rows) {
-                //echo "$this->rows\n\n";
-                $r = file_get_contents("{$this->clickhouseUrl}&query=INSERT+INTO+{$this->clickhouseTable}+FORMAT+JSONEachRow", false,
-                    stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-Type: text/plain', 'content' => $this->rows, 'ignore_errors' => true]]));
-                //echo "$r\n\n";
-                $this->rows = '';
-            }
-        });
+        Timer::add($this->timer, [$this, 'flush']);
+    }
+
+    public function flush() {
+        if ($this->rows === '') {
+            return;
+        }
+
+        $r = @file_get_contents("{$this->clickhouseUrl}&query=INSERT+INTO+{$this->clickhouseTable}+FORMAT+JSONEachRow", false,
+            stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-Type: text/plain', 'content' => $this->rows, 'ignore_errors' => true, 'timeout' => 10]]));
+
+        $status = 0;
+        if (isset($http_response_header[0]) && preg_match('#^HTTP/\S+\s+(\d{3})#', $http_response_header[0], $m)) {
+            $status = (int)$m[1];
+        }
+
+        if ($r === false || $status < 200 || $status >= 300) {
+            // keep the buffer and retry on the next tick
+            error_log("pinba-server: insert into {$this->clickhouseTable} failed (HTTP $status): " . trim((string)$r));
+            return;
+        }
+
+        $this->rows = '';
     }
 
     public function onMessage($connection, $data)
@@ -122,6 +139,10 @@ class PinbaWorker {
         }
 
         //var_export($row);
+        if (strlen($this->rows) > self::MAX_BUFFER_BYTES) {
+            error_log("pinba-server: buffer for {$this->clickhouseTable} exceeded " . self::MAX_BUFFER_BYTES . " bytes, dropping buffered rows");
+            $this->rows = '';
+        }
         $this->rows .= json_encode($row, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
     }
 }

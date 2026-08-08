@@ -32,15 +32,27 @@ $tcp_worker->onWorkerStart = function () use (&$request, &$streams, &$config){
     Timer::add($config['timer'],
         function() use (&$streams, &$config)
         {
-            if ($streams) {
-                $post = json_encode(['streams' => $streams], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-                //{"streams": [{"labels": "{foo=\"bar\"}","entries": [{ "ts": "2018-12-18T08:28:06.801064-04:00", "line": "baz" }]}]}
-                //echo $post . "\n\n";
-                $r = file_get_contents($config['lokiUrl'], false,
-                    stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-Type: application/json', 'content' => $post, 'ignore_errors' => true]]));
-                //echo "$r\n\n";
-                $streams = [];
+            if (!$streams) {
+                return;
             }
+
+            $post = json_encode(['streams' => $streams], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            //{"streams": [{"labels": "{foo=\"bar\"}","entries": [{ "ts": "2018-12-18T08:28:06.801064-04:00", "line": "baz" }]}]}
+            $r = @file_get_contents($config['lokiUrl'], false,
+                stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-Type: application/json', 'content' => $post, 'ignore_errors' => true, 'timeout' => 10]]));
+
+            $status = 0;
+            if (isset($http_response_header[0]) && preg_match('#^HTTP/\S+\s+(\d{3})#', $http_response_header[0], $m)) {
+                $status = (int)$m[1];
+            }
+
+            if ($r === false || $status < 200 || $status >= 300) {
+                // keep the buffer and retry on the next tick
+                error_log("pinba-server: push to {$config['lokiUrl']} failed (HTTP $status): " . trim((string)$r));
+                return;
+            }
+
+            $streams = [];
         }
     );
 };
@@ -127,6 +139,10 @@ $tcp_worker->onMessage = function($connection, $data) use (&$request, &$streams)
     }
     $stream['labels'] = '{' . join(',', $stream['labels']) . '}';
     $stream['entries'][] = ['ts' => date(DATE_RFC3339), 'line' => json_encode($row['entries'], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)];
+    if (count($streams) > 500000) {
+        error_log("pinba-server: loki stream buffer exceeded 500k entries, dropping buffered streams");
+        $streams = [];
+    }
     $streams[]= $stream;
 };
 
