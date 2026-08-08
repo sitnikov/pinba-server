@@ -28,6 +28,16 @@ To verify the installation, send a test packet and check the table:
 - `sudo systemd/install.sh pinba-server-loki` — the same for the Loki variant
 - `sudo systemd/uninstall.sh` — stops and removes the unit
 
+##### Docker
+
+A ready-to-use stack (pinba-server + ClickHouse + Grafana with the ClickHouse datasource plugin):
+
+- `docker compose -f docker/docker-compose.yml up -d --build`
+- `php tools/send_test_packet.php 127.0.0.1 30002` — send a test packet
+- Grafana: http://localhost:3000 (admin/admin), import dashboard [#10011](https://grafana.com/dashboards/10011)
+
+The pinba listeners are published on UDP ports 30002 (php) and 30003 (nginx).
+
 ##### Stats for 24 hours with about 10 RPS on php-fpm and 450 RPS on nginx:
 
 |table|rows|size, Mb|description|
@@ -39,7 +49,7 @@ To verify the installation, send a test packet and check the table:
 
 ##### Info
 - publications: [reddit(en)](https://www.reddit.com/r/PHP/comments/bigszu/statistics_and_monitoring_of_php_scripts_in_real/), [habr(ru)](https://habr.com/ru/post/444610/)
-- the installation of ClickHouse, pinba-server, pinba module for php and nginx on [Ubuntu 18.04 LTS](https://github.com/pinba-server/pinba-server/blob/master/docker/ubuntu18.04/Dockerfile) and [Centos 7](https://github.com/pinba-server/pinba-server/blob/master/docker/centos7/Dockerfile).
+- to monitor nginx as well, build [ngx_http_pinba_module](https://github.com/tony2001/ngx_http_pinba_module) — it makes nginx send pinba packets for every request (the `pinba.nginx_requests` worker on port 30003 stores them).
 
 ##### Grafana
 dashboard [#10011](https://grafana.com/dashboards/10011)
