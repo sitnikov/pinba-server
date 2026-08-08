@@ -30,7 +30,8 @@ foreach ($config['workers'] as $i => $workerConfig) {
         (int)$workerConfig['port'],
         (string)$workerConfig['clickhouseUrl'],
         (string)$workerConfig['clickhouseTable'],
-        (int)$workerConfig['timer']
+        (int)$workerConfig['timer'],
+        (array)($workerConfig['exclude'] ?? [])
     );
 }
 
@@ -40,9 +41,13 @@ class PinbaWorker {
     // ~2x headroom below the 200M systemd MemoryLimit
     private const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
+    private const EXCLUDABLE_FIELDS = ['hostname', 'server_name', 'script_name', 'schema'];
+
     private Worker $worker;
     private Request $request;
     private string $rows = '';
+    /** @var array<string, string[]> field => patterns */
+    private array $exclude = [];
 
     public function __construct(
         string $host,
@@ -50,10 +55,51 @@ class PinbaWorker {
         private readonly string $clickhouseUrl,
         private readonly string $clickhouseTable,
         private readonly int $timer,
+        array $exclude = [],
     ) {
+        foreach ($exclude as $field => $patterns) {
+            if (!in_array($field, self::EXCLUDABLE_FIELDS, true)) {
+                fwrite(STDERR, "pinba-server: unknown exclude field '$field' (supported: " . implode(', ', self::EXCLUDABLE_FIELDS) . ")\n");
+                exit(1);
+            }
+            foreach ((array)$patterns as $pattern) {
+                $pattern = (string)$pattern;
+                if ($pattern === '') {
+                    continue;
+                }
+                // /.../ means a regular expression, anything else is an fnmatch mask like "mail.*"
+                if (strlen($pattern) > 1 && $pattern[0] === '/' && @preg_match($pattern, '') === false) {
+                    fwrite(STDERR, "pinba-server: invalid exclude regex $pattern for '$field'\n");
+                    exit(1);
+                }
+                $this->exclude[$field][] = $pattern;
+            }
+        }
+
         $this->worker = new Worker("udp://$host:$port");
         $this->worker->onWorkerStart = [$this, 'onWorkerStart'];
         $this->worker->onMessage = [$this, 'onMessage'];
+    }
+
+    private function isExcluded(): bool {
+        foreach ($this->exclude as $field => $patterns) {
+            $value = match ($field) {
+                'hostname' => $this->request->getHostname(),
+                'server_name' => $this->request->getServerName(),
+                'script_name' => $this->request->getScriptName(),
+                'schema' => $this->request->getSchema(),
+            };
+            foreach ($patterns as $pattern) {
+                $matched = $pattern[0] === '/' && strlen($pattern) > 1
+                    ? (bool)preg_match($pattern, $value)
+                    : fnmatch($pattern, $value);
+                if ($matched) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public function onWorkerStart(): void {
@@ -93,6 +139,10 @@ class PinbaWorker {
     {
         $this->request->clear();
         $this->request->mergeFromString($data);
+
+        if ($this->exclude && $this->isExcluded()) {
+            return;
+        }
 
         //echo $data . "\n";
         //$json = $this->request->serializeToJsonString();
