@@ -1,5 +1,5 @@
 [Unit]
-Description=Pinba server (ClickHouse storage)
+Description=Pinba server (Loki storage)
 Documentation=https://github.com/pinba-server/pinba-server
 After=network.target
 Wants=network-online.target
@@ -8,9 +8,7 @@ Wants=network-online.target
 User=www-data
 Group=www-data
 WorkingDirectory=/opt/pinba-server
-ExecStart=/usr/bin/php /opt/pinba-server/workerman_clickhouse.php start
-# Override the config location if needed:
-#Environment=PINBA_CONFIG=/etc/pinba-server/config.json
+ExecStart=/usr/bin/php /opt/pinba-server/workerman_loki.php start
 
 Restart=always
 RestartSec=10
