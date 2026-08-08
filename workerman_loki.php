@@ -135,6 +135,7 @@ $tcp_worker->onMessage = function($connection, $data) use (&$request, &$streams)
 
 
     foreach ($row['labels'] as $name => $value) {
+        $value = strtr((string)$value, ['\\' => '\\\\', '"' => '\\"', "\n" => '\\n']);
         $stream['labels'][]= "$name=\"$value\"";
     }
     $stream['labels'] = '{' . join(',', $stream['labels']) . '}';
