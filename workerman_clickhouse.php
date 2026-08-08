@@ -31,7 +31,8 @@ foreach ($config['workers'] as $i => $workerConfig) {
         (string)$workerConfig['clickhouseUrl'],
         (string)$workerConfig['clickhouseTable'],
         (int)$workerConfig['timer'],
-        (array)($workerConfig['exclude'] ?? [])
+        (array)($workerConfig['exclude'] ?? []),
+        (array)($workerConfig['rewrite'] ?? [])
     );
 }
 
@@ -48,6 +49,8 @@ class PinbaWorker {
     private string $rows = '';
     /** @var array<string, string[]> field => patterns */
     private array $exclude = [];
+    /** @var array<string, array{string, string}[]> field => [regex, replacement] rules */
+    private array $rewrite = [];
 
     public function __construct(
         string $host,
@@ -56,7 +59,25 @@ class PinbaWorker {
         private readonly string $clickhouseTable,
         private readonly int $timer,
         array $exclude = [],
+        array $rewrite = [],
     ) {
+        foreach ($rewrite as $field => $rules) {
+            if (!in_array($field, self::EXCLUDABLE_FIELDS, true)) {
+                fwrite(STDERR, "pinba-server: unknown rewrite field '$field' (supported: " . implode(', ', self::EXCLUDABLE_FIELDS) . ")\n");
+                exit(1);
+            }
+            foreach ((array)$rules as $rule) {
+                if (!is_array($rule) || count($rule) !== 2 || !is_string($rule[0]) || !is_string($rule[1])) {
+                    fwrite(STDERR, "pinba-server: rewrite rule for '$field' must be a [\"/regex/\", \"replacement\"] pair\n");
+                    exit(1);
+                }
+                if (@preg_match($rule[0], '') === false) {
+                    fwrite(STDERR, "pinba-server: invalid rewrite regex {$rule[0]} for '$field'\n");
+                    exit(1);
+                }
+                $this->rewrite[$field][] = [$rule[0], $rule[1]];
+            }
+        }
         foreach ($exclude as $field => $patterns) {
             if (!in_array($field, self::EXCLUDABLE_FIELDS, true)) {
                 fwrite(STDERR, "pinba-server: unknown exclude field '$field' (supported: " . implode(', ', self::EXCLUDABLE_FIELDS) . ")\n");
@@ -79,6 +100,29 @@ class PinbaWorker {
         $this->worker = new Worker("udp://$host:$port");
         $this->worker->onWorkerStart = [$this, 'onWorkerStart'];
         $this->worker->onMessage = [$this, 'onMessage'];
+    }
+
+    private function applyRewrites(): void {
+        foreach ($this->rewrite as $field => $rules) {
+            $value = match ($field) {
+                'hostname' => $this->request->getHostname(),
+                'server_name' => $this->request->getServerName(),
+                'script_name' => $this->request->getScriptName(),
+                'schema' => $this->request->getSchema(),
+            };
+            $rewritten = $value;
+            foreach ($rules as [$pattern, $replacement]) {
+                $rewritten = preg_replace($pattern, $replacement, $rewritten) ?? $rewritten;
+            }
+            if ($rewritten !== $value) {
+                match ($field) {
+                    'hostname' => $this->request->setHostname($rewritten),
+                    'server_name' => $this->request->setServerName($rewritten),
+                    'script_name' => $this->request->setScriptName($rewritten),
+                    'schema' => $this->request->setSchema($rewritten),
+                };
+            }
+        }
     }
 
     private function isExcluded(): bool {
@@ -140,6 +184,9 @@ class PinbaWorker {
         $this->request->clear();
         $this->request->mergeFromString($data);
 
+        if ($this->rewrite) {
+            $this->applyRewrites();
+        }
         if ($this->exclude && $this->isExcluded()) {
             return;
         }

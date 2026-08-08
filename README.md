@@ -31,6 +31,16 @@ and `schema`:
 }
 ```
 
+An optional `rewrite` block normalizes field values before they are filtered
+and stored. Each rule is a `["/regex/", "replacement"]` pair applied in order,
+e.g. stripping a leading `www.` from server names:
+
+```json
+"rewrite": {
+    "server_name": [["/^www\\./", ""]]
+}
+```
+
 To verify the installation, send a test packet and check the table:
 
 - `php tools/send_test_packet.php 127.0.0.1 30002`
