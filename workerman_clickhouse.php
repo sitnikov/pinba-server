@@ -34,7 +34,8 @@ foreach ($config['workers'] as $i => $workerConfig) {
         (array)($workerConfig['exclude'] ?? []),
         (array)($workerConfig['rewrite'] ?? []),
         (array)($workerConfig['lowercase'] ?? []),
-        (array)($workerConfig['include'] ?? [])
+        (array)($workerConfig['include'] ?? []),
+        (array)($workerConfig['exclude_all_of'] ?? [])
     );
 }
 
@@ -53,6 +54,8 @@ class PinbaWorker {
     private array $include = [];
     /** @var array<string, string[]> field => patterns */
     private array $exclude = [];
+    /** @var array<int, array<string, string[]>> AND-groups: drop when every field of a group matches */
+    private array $excludeAllOf = [];
     /** @var array<string, array{string, string}[]> field => [regex, replacement] rules */
     private array $rewrite = [];
     /** @var string[] fields to lowercase (ASCII) before rewrite/exclude */
@@ -68,8 +71,19 @@ class PinbaWorker {
         array $rewrite = [],
         array $lowercase = [],
         array $include = [],
+        array $excludeAllOf = [],
     ) {
         $this->include = $this->compilePatterns($include, 'include');
+        foreach ($excludeAllOf as $group) {
+            if (!is_array($group) || !$group) {
+                fwrite(STDERR, "pinba-server: each exclude_all_of entry must be a non-empty {field: pattern} object\n");
+                exit(1);
+            }
+            $compiled = $this->compilePatterns($group, 'exclude_all_of');
+            if ($compiled) {
+                $this->excludeAllOf[] = $compiled;
+            }
+        }
         foreach ($lowercase as $field) {
             if (!in_array($field, self::EXCLUDABLE_FIELDS, true)) {
                 fwrite(STDERR, "pinba-server: unknown lowercase field '$field' (supported: " . implode(', ', self::EXCLUDABLE_FIELDS) . ")\n");
@@ -207,6 +221,24 @@ class PinbaWorker {
             }
         }
 
+        foreach ($this->excludeAllOf as $group) {
+            foreach ($group as $field => $patterns) {
+                $value = $this->getField($field);
+                $matched = false;
+                foreach ($patterns as $pattern) {
+                    if ($this->matches($pattern, $value)) {
+                        $matched = true;
+                        break;
+                    }
+                }
+                if (!$matched) {
+                    continue 2; // this group doesn't apply, try the next one
+                }
+            }
+
+            return true; // every field of the group matched
+        }
+
         return false;
     }
 
@@ -254,7 +286,7 @@ class PinbaWorker {
         if ($this->include && !$this->isIncluded()) {
             return;
         }
-        if ($this->exclude && $this->isExcluded()) {
+        if (($this->exclude || $this->excludeAllOf) && $this->isExcluded()) {
             return;
         }
 

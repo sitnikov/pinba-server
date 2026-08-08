@@ -60,6 +60,17 @@ The blocks:
   empty (or absent) to accept all domains.
 - `exclude` — denylist: a request matching any pattern of any listed field is
   dropped.
+- `exclude_all_of` — list of AND-groups for conditions spanning several
+  fields: a request is dropped when **every** field of a group matches
+  (values may be a single pattern or a list, OR within the field). E.g. CLI
+  cron jobs have no HTTP Host and report `server_name` as `unknown` — to drop
+  web requests without a valid Host while keeping the crons:
+
+  ```json
+  "exclude_all_of": [
+      {"server_name": "unknown", "schema": ["web", "http*"]}
+  ]
+  ```
 
 To verify the installation, send a test packet and check the table:
 
