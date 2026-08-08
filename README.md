@@ -19,12 +19,17 @@
 The list of UDP listeners and their ClickHouse targets is in `config.json`
 (the path can be overridden with the `PINBA_CONFIG` environment variable).
 
-A worker can drop unwanted requests with an optional `exclude` block. Patterns
-are fnmatch-style masks (`mail.*`) or, when wrapped in slashes, regular
-expressions; supported fields are `hostname`, `server_name`, `script_name`
-and `schema`:
+A worker can drop unwanted requests with optional `include` (allowlist) and
+`exclude` blocks. When `include` is non-empty, only requests matching one of
+its patterns per field pass; `exclude` then drops matches. An empty list is a
+no-op. Patterns are fnmatch-style masks (`mail.*`) or, when wrapped in
+slashes, regular expressions; supported fields are `hostname`, `server_name`,
+`script_name` and `schema`:
 
 ```json
+"include": {
+    "server_name": ["*.example.com", "example.com"]
+},
 "exclude": {
     "server_name": ["mail.*", "/^dev-/"],
     "script_name": ["/health.php"]
