@@ -75,13 +75,11 @@ $tcp_worker->onMessage = function($connection, $data) use (&$request, &$streams)
     ];
 
     $dictionary = $request->getDictionary();
-    $tagName = $request->getTagName();
+    $tagNames = $request->getTagName();
     $tagValue = $request->getTagValue();
 
-    if (!empty($tagName)) {
-        foreach ($tagName as $tagId => $tagName) {
-            $row['labels'][$dictionary[$tagName]] = $dictionary[$tagValue[$tagId]];
-        }
+    foreach ($tagNames as $tagId => $tagName) {
+        $row['labels'][$dictionary[$tagName]] = $dictionary[$tagValue[$tagId]];
     }
 
     $timerHitCounts = $request->getTimerHitCount();

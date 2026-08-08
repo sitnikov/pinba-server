@@ -91,11 +91,9 @@ class PinbaWorker {
         $tagNames = $this->request->getTagName();
         $tagValue = $this->request->getTagValue();
 
-        if (!empty($tagNames)) {
-            foreach ($tagNames as $tagId => $tagName) {
-                $row['tags.name'][] = $dictionary[$tagName];
-                $row['tags.value'][] = $dictionary[$tagValue[$tagId]];
-            }
+        foreach ($tagNames as $tagId => $tagName) {
+            $row['tags.name'][] = $dictionary[$tagName];
+            $row['tags.value'][] = $dictionary[$tagValue[$tagId]];
         }
 
         $timerHitCounts = $this->request->getTimerHitCount();

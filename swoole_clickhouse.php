@@ -71,11 +71,9 @@ $server->on('Packet', function (Server $server, $data, $addr) use (&$request, &$
     $tagNames = $request->getTagName();
     $tagValue = $request->getTagValue();
 
-    if (!empty($tagNames)) {
-        foreach ($tagNames as $tagId => $tagName) {
-            $row['tags.name'][] = $dictionary[$tagName];
-            $row['tags.value'][] = $dictionary[$tagValue[$tagId]];
-        }
+    foreach ($tagNames as $tagId => $tagName) {
+        $row['tags.name'][] = $dictionary[$tagName];
+        $row['tags.value'][] = $dictionary[$tagValue[$tagId]];
     }
 
     $timerHitCounts = $request->getTimerHitCount();
