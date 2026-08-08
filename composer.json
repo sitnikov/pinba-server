@@ -17,7 +17,10 @@
         "source": "https://github.com/pinba-server/pinba-server"
     },
     "require": {
-        "workerman/workerman": "^3.5",
-        "google/protobuf": "^3.7"
+        "php": ">=8.4",
+        "ext-pcntl": "*",
+        "ext-posix": "*",
+        "workerman/workerman": "^5.0",
+        "google/protobuf": "^5.35"
     }
 }

@@ -5,7 +5,7 @@ require_once __DIR__ . '/Pinba/Request.php';
 require_once __DIR__ . '/GPBMetadata/Pinba.php';
 
 use Workerman\Worker;
-use Workerman\Lib\Timer;
+use Workerman\Timer;
 use Pinba\Request;
 
 if (!ini_get('date.timezone')) {
@@ -47,7 +47,7 @@ class PinbaWorker {
         Timer::add($this->timer, function() {
             if ($this->rows) {
                 //echo "$this->rows\n\n";
-                $r = file_get_contents("{$this->clickhouseUrl}&query=INSERT+INTO+{$this->clickhouseTable}+FORMAT+JSONEachRow", null,
+                $r = file_get_contents("{$this->clickhouseUrl}&query=INSERT+INTO+{$this->clickhouseTable}+FORMAT+JSONEachRow", false,
                     stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-Type: text/plain', 'content' => $this->rows, 'ignore_errors' => true]]));
                 //echo "$r\n\n";
                 $this->rows = '';

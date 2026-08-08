@@ -27,7 +27,7 @@ $server->on('WorkerStart', function (Server $server) use ($request, $config, &$j
     $server->tick(1000, function () use ($request, $config, &$jsonRows) {
         if ($jsonRows) {
             //echo "$jsonRows\n\n";
-            $r = file_get_contents("{$config['clickhouseUrl']}&query=INSERT%20INTO%20{$config['db.table']}%20FORMAT%20JSONEachRow", null,
+            $r = file_get_contents("{$config['clickhouseUrl']}&query=INSERT%20INTO%20{$config['db.table']}%20FORMAT%20JSONEachRow", false,
                 stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-type: text/plain', 'content' => $jsonRows, 'ignore_errors' => true]]));
             //echo "$r\n\n";
             $jsonRows = '';
